@@ -157,6 +157,31 @@ The frontend will open at `http://localhost:3000`
 
 ## VPS Deployment (Ubuntu + Nginx + PM2)
 
+### One-command CLI deploy
+
+This repo includes [deploy/deploy-vps.sh](deploy/deploy-vps.sh), which automates the VPS setup, environment file generation, frontend build, nginx configuration, PM2 startup, and optional HTTPS.
+
+Run it on the VPS from the repository root:
+
+```bash
+bash deploy/deploy-vps.sh \
+   --server-name "your-domain.com www.your-domain.com" \
+   --repo-url https://github.com/<your-user>/<your-repo>.git \
+   --branch main \
+   --https \
+   --certbot-email you@example.com
+```
+
+If you are deploying to a raw IP and not using HTTPS yet:
+
+```bash
+bash deploy/deploy-vps.sh \
+   --server-name "YOUR_VPS_IP" \
+   --repo-url https://github.com/<your-user>/<your-repo>.git
+```
+
+The script will prompt for any missing secrets such as `MONGODB_URI`, `ADMIN_USERNAME`, `ADMIN_PASSWORD`, and `JWT_SECRET`. Use `--non-interactive` if you want to supply everything as flags and fail on missing values.
+
 ### 1. Install dependencies on the VPS
 
 ```bash
