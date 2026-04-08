@@ -1,0 +1,42 @@
+.search-page {
+  padding: 2rem 0;
+}
+
+.search-header {
+  margin-bottom: 2rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #eff3f4;
+}
+
+.search-header h1 {
+  font-size: 2rem;
+  color: #0f1419;
+  margin-bottom: 0.5rem;
+}
+
+.search-term {
+  color: #657786;
+  font-size: 1.1rem;
+}
+
+.search-results {
+  display: flex;
+  flex-direction: column;
+}
+
+.no-results {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #657786;
+  font-size: 1.1rem;
+}
+
+@media (max-width: 768px) {
+  .search-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .search-term {
+    font-size: 1rem;
+  }
+}

@@ -1,0 +1,57 @@
+.tweet-feed-page {
+  padding: 2rem 0;
+}
+
+.feed-header {
+  margin-bottom: 2rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid #eff3f4;
+}
+
+.feed-header h1 {
+  font-size: 2rem;
+  color: #0f1419;
+}
+
+.posts-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.posts-list .post:first-child {
+  border-top-left-radius: 12px;
+  border-top-right-radius: 12px;
+}
+
+.posts-list .post:last-child {
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.posts-list .post {
+  border-radius: 0;
+  border-right: 1px solid #eff3f4;
+  border-left: 1px solid #eff3f4;
+  margin-bottom: 0;
+}
+
+.posts-list .post:not(:last-child) {
+  border-bottom: none;
+}
+
+.load-more {
+  width: 100%;
+  margin-top: 2rem;
+}
+
+@media (max-width: 768px) {
+  .feed-header h1 {
+    font-size: 1.5rem;
+  }
+
+  .posts-list .post {
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+}
