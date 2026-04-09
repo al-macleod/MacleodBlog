@@ -5,6 +5,7 @@ const { scanBuffer } = require('../utils/virusScan');
 const { processImage } = require('../utils/imageProcessor');
 const { extractThumbnail } = require('../utils/videoProcessor');
 const { uploadBuffer } = require('../utils/storage');
+const { IMAGE_MAX_SIZE, VIDEO_MAX_SIZE } = require('./upload');
 
 const ALLOWED_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
 const ALLOWED_VIDEO_MIMES = new Set(['video/mp4', 'video/webm']);
@@ -74,6 +75,18 @@ async function processMedia(req, res, next) {
         // 1. Magic-bytes validation
         const detectedMime = validateMagicBytes(file.buffer, file.mimetype);
 
+        // 1b. Per-type file size enforcement
+        const isImage = ALLOWED_IMAGE_MIMES.has(detectedMime);
+        const sizeLimit = isImage ? IMAGE_MAX_SIZE : VIDEO_MAX_SIZE;
+        if (file.buffer.length > sizeLimit) {
+          const limitMB = (sizeLimit / 1048576).toFixed(0);
+          const err = new Error(
+            `${isImage ? 'Image' : 'Video'} file "${file.originalname}" exceeds the ${limitMB} MB limit`
+          );
+          err.statusCode = 413;
+          throw err;
+        }
+
         // 2. Virus scan (stub – replace in production)
         const scanResult = await scanBuffer(file.buffer, file.originalname);
         if (!scanResult.clean) {
@@ -84,7 +97,6 @@ async function processMedia(req, res, next) {
           throw err;
         }
 
-        const isImage = ALLOWED_IMAGE_MIMES.has(detectedMime);
         let storageKey, thumbnailKey;
 
         if (isImage) {
