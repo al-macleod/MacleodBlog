@@ -16,6 +16,8 @@ const { sendPasswordResetEmail } = require('../utils/email');
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^[\d\s\+\-\(\)]{10,}$/; // Basic phone validation
 const passwordStrengthRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
+
+const getAppUrl = () => process.env.CORS_ORIGIN || 'http://localhost:3000';
 const passwordRules = {
   minLength: 8,
   hasLower: /[a-z]/,
@@ -301,8 +303,7 @@ exports.forgotPassword = async (req, res) => {
     user.updatedAt = new Date();
     await user.save();
 
-    const appUrl = process.env.CORS_ORIGIN || 'http://localhost:3000';
-    const resetUrl = `${appUrl}/account?mode=reset&token=${rawToken}`;
+    const resetUrl = `${getAppUrl()}/account?mode=reset&token=${rawToken}`;
 
     if (process.env.NODE_ENV !== 'production') {
       return res.json({
@@ -434,16 +435,13 @@ exports.oauthCallback = (provider) => async (req, res) => {
   try {
     const user = req.user;
     if (!user) {
-      const appUrl = process.env.CORS_ORIGIN || 'http://localhost:3000';
-      return res.redirect(`${appUrl}/account?error=oauth_failed`);
+      return res.redirect(`${getAppUrl()}/account?error=oauth_failed`);
     }
 
     await issueTokens(res, user);
 
-    const appUrl = process.env.CORS_ORIGIN || 'http://localhost:3000';
-    return res.redirect(`${appUrl}/account?oauth=success`);
+    return res.redirect(`${getAppUrl()}/account?oauth=success`);
   } catch (error) {
-    const appUrl = process.env.CORS_ORIGIN || 'http://localhost:3000';
-    return res.redirect(`${appUrl}/account?error=oauth_failed`);
+    return res.redirect(`${getAppUrl()}/account?error=oauth_failed`);
   }
 };

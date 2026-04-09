@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FaGoogle, FaGithub } from 'react-icons/fa';
 import api from '../services/api';
@@ -80,18 +80,18 @@ function UserAuthPage() {
     [resetForm.confirmPassword, resetForm.password]
   );
 
-  const loadSession = async () => {
+  const loadSession = useCallback(async () => {
     try {
       const response = await api.get('/users/me');
       setUser(response.data.user);
     } catch (error) {
       setUser(null);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadSession();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [loadSession]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -118,7 +118,7 @@ function UserAuthPage() {
     if (queryToken) {
       setResetForm((prev) => ({ ...prev, token: queryToken }));
     }
-  }, [location.search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [location.search, loadSession]);
 
   const handleLogin = async (event) => {
     event.preventDefault();

@@ -9,6 +9,12 @@ const generateAvatarInitials = (firstName, lastName) => {
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=random&color=fff`;
 };
 
+// Parse a display name into first and last name components
+const parseDisplayName = (displayName, defaultFirst, defaultLast) => {
+  const [first = defaultFirst, ...rest] = (displayName || `${defaultFirst} ${defaultLast}`).trim().split(' ');
+  return { firstName: first, lastName: rest.join(' ') || defaultLast };
+};
+
 const setupGoogleStrategy = () => {
   const clientID = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -25,22 +31,20 @@ const setupGoogleStrategy = () => {
       try {
         const email = (profile.emails?.[0]?.value || '').toLowerCase().trim();
         const googleId = profile.id;
-        const displayName = profile.displayName || 'Google User';
-        const [firstNameFallback = 'Google', ...restName] = displayName.trim().split(' ');
-        const lastNameFallback = restName.join(' ') || 'User';
+        const { firstName, lastName } = parseDisplayName(profile.displayName, 'Google', 'User');
         const picture = profile.photos?.[0]?.value || '';
 
         let user = await User.findOne({ $or: [{ googleId }, { email }] });
 
         if (!user) {
           user = await User.create({
-            firstName: firstNameFallback,
-            lastName: lastNameFallback,
+            firstName,
+            lastName,
             email,
             passwordHash: null,
             googleId,
             authProvider: 'google',
-            avatar: picture || generateAvatarInitials(firstNameFallback, lastNameFallback),
+            avatar: picture || generateAvatarInitials(firstName, lastName),
             role: 'user',
             isActive: true,
             postsCount: 0,
@@ -79,9 +83,7 @@ const setupGitHubStrategy = () => {
         const rawEmail = profile.emails?.[0]?.value || '';
         const email = rawEmail.toLowerCase().trim();
         const githubId = profile.id ? String(profile.id) : null;
-        const displayName = profile.displayName || profile.username || 'GitHub User';
-        const [firstNameFallback = 'GitHub', ...restName] = displayName.trim().split(' ');
-        const lastNameFallback = restName.join(' ') || 'User';
+        const { firstName, lastName } = parseDisplayName(profile.displayName || profile.username, 'GitHub', 'User');
         const picture = profile.photos?.[0]?.value || '';
 
         // GitHub accounts may have no public email; require one to proceed
@@ -93,13 +95,13 @@ const setupGitHubStrategy = () => {
 
         if (!user) {
           user = await User.create({
-            firstName: firstNameFallback,
-            lastName: lastNameFallback,
+            firstName,
+            lastName,
             email,
             passwordHash: null,
             githubId,
             authProvider: 'github',
-            avatar: picture || generateAvatarInitials(firstNameFallback, lastNameFallback),
+            avatar: picture || generateAvatarInitials(firstName, lastName),
             role: 'user',
             isActive: true,
             postsCount: 0,

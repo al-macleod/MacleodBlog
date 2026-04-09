@@ -10,6 +10,7 @@ const rateLimit = require('express-rate-limit');
 dotenv.config();
 
 const { initPassport } = require('./utils/passport');
+const csrfMiddleware = require('./middleware/csrf');
 
 mongoose.set('strictQuery', true);
 
@@ -37,6 +38,9 @@ app.use('/api', apiLimiter);
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// CSRF protection for all API state-changing routes
+app.use('/api', csrfMiddleware);
 
 initPassport();
 

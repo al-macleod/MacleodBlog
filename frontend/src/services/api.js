@@ -2,12 +2,32 @@ import axios from 'axios';
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+const CSRF_COOKIE = 'buzzforge_csrf';
+const CSRF_HEADER = 'x-csrf-token';
+
+const getCsrfToken = () => {
+  const match = document.cookie.split('; ').find((row) => row.startsWith(`${CSRF_COOKIE}=`));
+  return match ? match.split('=')[1] : null;
+};
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
+});
+
+// Attach CSRF token to all state-changing requests
+api.interceptors.request.use((config) => {
+  const method = (config.method || '').toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const token = getCsrfToken();
+    if (token) {
+      config.headers[CSRF_HEADER] = token;
+    }
+  }
+  return config;
 });
 
 // Automatically attempt one token refresh on 401 responses, then retry
