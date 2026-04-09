@@ -317,7 +317,7 @@ exports.forgotPassword = async (req, res) => {
     try {
       await sendPasswordResetEmail(user.email, resetUrl, ttlMinutes);
     } catch (emailError) {
-      console.error('Failed to send password reset email:', emailError.message);
+      console.error('Failed to send password reset email to user', user.id, ':', emailError.message);
       // Don't reveal email errors to caller for security
     }
 

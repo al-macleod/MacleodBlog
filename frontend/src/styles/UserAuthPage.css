@@ -338,19 +338,19 @@
 }
 
 .btn-google {
-  background: #fff;
-  color: #3c4043;
-  border-color: #dadce0;
+  background: var(--color-surface);
+  color: var(--color-text);
+  border-color: var(--color-border);
 }
 
 .btn-google:hover {
-  background: #f8f9fa;
-  border-color: #bdc1c6;
+  background: var(--color-nav-hover);
+  border-color: var(--color-text-muted);
 }
 
 .btn-github {
   background: #24292e;
-  color: #fff;
+  color: #ffffff;
   border-color: #1b1f23;
 }
 

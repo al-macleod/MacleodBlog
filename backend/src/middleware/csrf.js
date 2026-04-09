@@ -2,6 +2,8 @@ const crypto = require('crypto');
 
 const CSRF_COOKIE = 'buzzforge_csrf';
 const CSRF_HEADER = 'x-csrf-token';
+const ERR_MISSING = 'CSRF token missing';
+const ERR_INVALID = 'CSRF token invalid';
 
 // Safe HTTP methods that don't need CSRF protection
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -39,7 +41,7 @@ const csrfMiddleware = (req, res, next) => {
     }
 
     // First POST before a GET – reject (no cookie yet)
-    return res.status(403).json({ error: 'CSRF token missing' });
+    return res.status(403).json({ error: ERR_MISSING });
   }
 
   if (SAFE_METHODS.has(req.method)) {
@@ -50,7 +52,7 @@ const csrfMiddleware = (req, res, next) => {
   const headerToken = req.headers[CSRF_HEADER];
 
   if (!headerToken) {
-    return res.status(403).json({ error: 'CSRF token missing' });
+    return res.status(403).json({ error: ERR_MISSING });
   }
 
   // Timing-safe comparison to prevent timing attacks
@@ -61,10 +63,10 @@ const csrfMiddleware = (req, res, next) => {
       cookieBuf.length !== headerBuf.length ||
       !crypto.timingSafeEqual(cookieBuf, headerBuf)
     ) {
-      return res.status(403).json({ error: 'CSRF token invalid' });
+      return res.status(403).json({ error: ERR_INVALID });
     }
   } catch (_) {
-    return res.status(403).json({ error: 'CSRF token invalid' });
+    return res.status(403).json({ error: ERR_INVALID });
   }
 
   return next();

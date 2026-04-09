@@ -88,7 +88,7 @@ const setupGitHubStrategy = () => {
 
         // GitHub accounts may have no public email; require one to proceed
         if (!email) {
-          return done(new Error('No email address associated with this GitHub account. Please add a public email in GitHub settings.'));
+          return done(new Error('No public email address found for this GitHub account. Please set your primary email as public in your GitHub settings under Profile → Public email.'));
         }
 
         let user = await User.findOne({ $or: [{ githubId }, { email }] });
