@@ -6,6 +6,7 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const { startWorkers, stopWorkers } = require('./queues/workerBootstrap');
 
 dotenv.config();
 
@@ -38,6 +39,9 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Serve generated sitemap
+app.use('/public', express.static(path.join(__dirname, '../public')));
 
 const mongoUri = process.env.MONGODB_URI || 'mongodb://localhost:27017/buzzforge';
 
@@ -79,10 +83,23 @@ const startServer = async () => {
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });
+
+    // Start background job workers (non-blocking; gracefully skipped if Redis is unavailable)
+    await startWorkers();
   } catch (error) {
     console.error('MongoDB connection error:', error.message);
     process.exit(1);
   }
 };
+
+const shutdown = async (signal) => {
+  console.log(`${signal} received, shutting down gracefully…`);
+  await stopWorkers();
+  await mongoose.connection.close();
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));
 
 startServer();

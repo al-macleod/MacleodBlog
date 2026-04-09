@@ -1,6 +1,8 @@
 const Comment = require('../models/Comment');
 const Post = require('../models/Post');
+const User = require('../models/User');
 const { v4: uuidv4 } = require('uuid');
+const { enqueueEmail } = require('../queues/jobs/emailJobs');
 
 // Get comments for a post
 exports.getComments = async (req, res) => {
@@ -87,6 +89,22 @@ exports.approveComment = async (req, res) => {
 
     if (!comment) {
       return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    // Notify the post author about the newly approved comment
+    const post = await Post.findOne({ id: comment.postId }).select('id title slug authorId');
+    if (post) {
+      const author = await User.findOne({ id: post.authorId }).select('email firstName lastName');
+      if (author && author.email) {
+        await enqueueEmail('new-comment', {
+          to: author.email,
+          postAuthorName: `${author.firstName} ${author.lastName}`.trim(),
+          commenterName: comment.author || 'Anonymous',
+          postTitle: post.title,
+          postSlug: post.slug,
+          commentContent: comment.content.slice(0, 300)
+        });
+      }
     }
 
     res.json(comment);

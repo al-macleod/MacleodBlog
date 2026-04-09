@@ -1,10 +1,13 @@
 const sanitizeHtml = require('sanitize-html');
 const { v4: uuidv4 } = require('uuid');
+const path = require('path');
 const Post = require('../models/Post');
 const Comment = require('../models/Comment');
 const Like = require('../models/Like');
 const User = require('../models/User');
 const { calculateQualityScore } = require('../utils/qualityScore');
+const { enqueueSitemapRegeneration } = require('../queues/jobs/sitemapJobs');
+const { enqueueMediaOptimization } = require('../queues/jobs/mediaJobs');
 const sanitizeOptions = {
   allowedTags: [
     'p',
@@ -410,6 +413,21 @@ exports.createPost = async (req, res) => {
     user.updatedAt = new Date();
     await user.save();
 
+    // Enqueue media optimization for each uploaded image
+    for (const file of (req.files || [])) {
+      if (file.mimetype.startsWith('image/')) {
+        await enqueueMediaOptimization({
+          filePath: path.resolve(file.path || path.join(__dirname, '../../uploads', file.filename)),
+          filename: file.filename,
+          mimeType: file.mimetype,
+          postId: newPost.id
+        });
+      }
+    }
+
+    // Trigger sitemap regeneration
+    await enqueueSitemapRegeneration();
+
     const [enrichedPost] = await enrichPostsWithAuthors([newPost]);
     res.status(201).json(enrichedPost);
   } catch (error) {
@@ -457,6 +475,9 @@ exports.updatePost = async (req, res) => {
     post.updatedAt = new Date();
     await post.save();
 
+    // Trigger sitemap regeneration
+    await enqueueSitemapRegeneration();
+
     const [enrichedPost] = await enrichPostsWithAuthors([post]);
     res.json(enrichedPost);
   } catch (error) {
@@ -485,6 +506,9 @@ exports.deletePost = async (req, res) => {
         $set: { updatedAt: new Date() }
       }
     );
+
+    // Trigger sitemap regeneration
+    await enqueueSitemapRegeneration();
 
     res.json({ message: 'Post deleted successfully' });
   } catch (error) {
