@@ -216,7 +216,7 @@ const ensureAuthorCanManagePost = (post, userId) => {
 };
 
 // Get all posts or filter by type
-exports.getPosts = async (req, res) => {
+exports.getPosts = async (req, res, next) => {
   try {
     const { type, hashtag, search, userId, limit = 20, skip = 0 } = req.query;
 
@@ -252,11 +252,11 @@ exports.getPosts = async (req, res) => {
       hasMore: skip + posts.length < total
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-exports.getAdminPosts = async (req, res) => {
+exports.getAdminPosts = async (req, res, next) => {
   try {
     const { type, limit = 50, skip = 0 } = req.query;
     const query = {};
@@ -278,12 +278,12 @@ exports.getAdminPosts = async (req, res) => {
       hasMore: parseInt(skip, 10) + posts.length < total
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Get single post
-exports.getPost = async (req, res) => {
+exports.getPost = async (req, res, next) => {
   try {
     const post = await findPublishedPost(req.params.id);
 
@@ -299,11 +299,11 @@ exports.getPost = async (req, res) => {
 
     res.json(enrichedPost);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-exports.getAdminAnalytics = async (req, res) => {
+exports.getAdminAnalytics = async (req, res, next) => {
   try {
     const totals = await Post.aggregate([
       {
@@ -352,12 +352,12 @@ exports.getAdminAnalytics = async (req, res) => {
       topPosts
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Create post
-exports.createPost = async (req, res) => {
+exports.createPost = async (req, res, next) => {
   try {
     const { title, content, excerpt, type = 'tweet', seoTitle, seoDescription } = req.body;
     const user = await User.findOne({ id: req.user.userId, isActive: true });
@@ -413,12 +413,12 @@ exports.createPost = async (req, res) => {
     const [enrichedPost] = await enrichPostsWithAuthors([newPost]);
     res.status(201).json(enrichedPost);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Update post
-exports.updatePost = async (req, res) => {
+exports.updatePost = async (req, res, next) => {
   try {
     const { title, content, excerpt, isPublished, seoTitle, seoDescription } = req.body;
     const postId = req.params.id;
@@ -460,12 +460,12 @@ exports.updatePost = async (req, res) => {
     const [enrichedPost] = await enrichPostsWithAuthors([post]);
     res.json(enrichedPost);
   } catch (error) {
-    res.status(error.statusCode || 500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Delete post
-exports.deletePost = async (req, res) => {
+exports.deletePost = async (req, res, next) => {
   try {
     const post = await Post.findOneAndDelete({ id: req.params.id });
 
@@ -488,12 +488,12 @@ exports.deletePost = async (req, res) => {
 
     res.json({ message: 'Post deleted successfully' });
   } catch (error) {
-    res.status(error.statusCode || 500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Get trending hashtags
-exports.getTrendingHashtags = async (req, res) => {
+exports.getTrendingHashtags = async (req, res, next) => {
   try {
     const hashtags = await Post.aggregate([
       { $match: { isPublished: true } },
@@ -505,12 +505,12 @@ exports.getTrendingHashtags = async (req, res) => {
 
     res.json(hashtags);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Get library posts ranked by quality score
-exports.getLibrary = async (req, res) => {
+exports.getLibrary = async (req, res, next) => {
   try {
     const {
       type,
@@ -588,6 +588,6 @@ exports.getLibrary = async (req, res) => {
       hasMore: parseInt(skip) + paginatedPosts.length < total
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };

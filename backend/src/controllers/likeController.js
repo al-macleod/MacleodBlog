@@ -38,34 +38,34 @@ const toggleReaction = async (req, res, reactionType, postField, responseFlag, r
 };
 
 // Toggle like
-exports.toggleLike = async (req, res) => {
+exports.toggleLike = async (req, res, next) => {
   try {
     return await toggleReaction(req, res, 'like', 'likes', 'liked', 'likes');
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Toggle dislike
-exports.toggleDislike = async (req, res) => {
+exports.toggleDislike = async (req, res, next) => {
   try {
     return await toggleReaction(req, res, 'dislike', 'dislikes', 'disliked', 'dislikes');
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Toggle repost
-exports.toggleRepost = async (req, res) => {
+exports.toggleRepost = async (req, res, next) => {
   try {
     return await toggleReaction(req, res, 'repost', 'reposts', 'reposted', 'reposts');
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Check if user liked/reposted
-exports.checkStatus = async (req, res) => {
+exports.checkStatus = async (req, res, next) => {
   try {
     const { postId } = req.params;
     const ip = getClientIp(req);
@@ -80,6 +80,6 @@ exports.checkStatus = async (req, res) => {
       reposted: !!reposted
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };

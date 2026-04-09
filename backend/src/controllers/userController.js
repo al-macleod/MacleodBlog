@@ -117,7 +117,7 @@ const toPublicUser = (user) => ({
   createdAt: user.createdAt
 });
 
-exports.register = async (req, res) => {
+exports.register = async (req, res, next) => {
   try {
     const {
       firstName,
@@ -204,11 +204,11 @@ exports.register = async (req, res) => {
     res.cookie(cookieName, token, getCookieOptions());
     return res.status(201).json({ user: toPublicUser(user), authenticated: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return next(error);
   }
 };
 
-exports.login = async (req, res) => {
+exports.login = async (req, res, next) => {
   try {
     const { email, password } = req.body;
 
@@ -239,7 +239,7 @@ exports.login = async (req, res) => {
     res.cookie(cookieName, token, getCookieOptions());
     return res.json({ user: toPublicUser(user), authenticated: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return next(error);
   }
 };
 
@@ -248,7 +248,7 @@ exports.logout = (req, res) => {
   return res.json({ authenticated: false });
 };
 
-exports.forgotPassword = async (req, res) => {
+exports.forgotPassword = async (req, res, next) => {
   try {
     const { email } = req.body;
     const safeResponse = {
@@ -289,11 +289,11 @@ exports.forgotPassword = async (req, res) => {
 
     return res.json(safeResponse);
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return next(error);
   }
 };
 
-exports.resetPassword = async (req, res) => {
+exports.resetPassword = async (req, res, next) => {
   try {
     const { token, password, confirmPassword } = req.body;
 
@@ -327,11 +327,11 @@ exports.resetPassword = async (req, res) => {
 
     return res.json({ message: 'Password has been reset successfully. You can now sign in.' });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return next(error);
   }
 };
 
-exports.me = async (req, res) => {
+exports.me = async (req, res, next) => {
   try {
     const user = await User.findOne({ id: req.user.userId });
     if (!user || !user.isActive) {
@@ -340,11 +340,11 @@ exports.me = async (req, res) => {
 
     return res.json({ user: toPublicUser(user), authenticated: true });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return next(error);
   }
 };
 
-exports.updateProfile = async (req, res) => {
+exports.updateProfile = async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const {
@@ -374,11 +374,11 @@ exports.updateProfile = async (req, res) => {
 
     return res.json({ user: toPublicUser(user) });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return next(error);
   }
 };
 
-exports.getUserProfile = async (req, res) => {
+exports.getUserProfile = async (req, res, next) => {
   try {
     const { userId } = req.params;
 
@@ -389,11 +389,11 @@ exports.getUserProfile = async (req, res) => {
 
     return res.json({ user: toPublicUser(user) });
   } catch (error) {
-    return res.status(500).json({ error: error.message });
+    return next(error);
   }
 };
 
-exports.googleSignIn = async (req, res) => {
+exports.googleSignIn = async (req, res, next) => {
   try {
     const { idToken } = req.body;
 
@@ -450,6 +450,8 @@ exports.googleSignIn = async (req, res) => {
       authenticated: true
     });
   } catch (error) {
-    return res.status(401).json({ error: error.message || 'Google sign in failed' });
+    // Treat Google sign-in errors as 401 so the handler uses a safe message in production
+    error.statusCode = error.statusCode || 401;
+    return next(error);
   }
 };

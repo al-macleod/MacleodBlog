@@ -3,7 +3,7 @@ const Post = require('../models/Post');
 const { v4: uuidv4 } = require('uuid');
 
 // Get comments for a post
-exports.getComments = async (req, res) => {
+exports.getComments = async (req, res, next) => {
   try {
     const { postId } = req.params;
     const { limit = 20, skip = 0 } = req.query;
@@ -21,11 +21,11 @@ exports.getComments = async (req, res) => {
       hasMore: skip + comments.length < total
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
-exports.getPendingComments = async (req, res) => {
+exports.getPendingComments = async (req, res, next) => {
   try {
     const comments = await Comment.find({ isApproved: false }).sort({ createdAt: 1 });
     const postIds = [...new Set(comments.map((comment) => comment.postId))];
@@ -40,12 +40,12 @@ exports.getPendingComments = async (req, res) => {
       }))
     });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Create comment
-exports.createComment = async (req, res) => {
+exports.createComment = async (req, res, next) => {
   try {
     const { postId, author, email, content } = req.body;
 
@@ -72,12 +72,12 @@ exports.createComment = async (req, res) => {
 
     res.status(201).json(newComment);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Approve comment (admin only)
-exports.approveComment = async (req, res) => {
+exports.approveComment = async (req, res, next) => {
   try {
     const comment = await Comment.findOneAndUpdate(
       { id: req.params.id },
@@ -91,12 +91,12 @@ exports.approveComment = async (req, res) => {
 
     res.json(comment);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };
 
 // Delete comment
-exports.deleteComment = async (req, res) => {
+exports.deleteComment = async (req, res, next) => {
   try {
     const comment = await Comment.findOne({ id: req.params.id });
 
@@ -115,6 +115,6 @@ exports.deleteComment = async (req, res) => {
 
     res.json({ message: 'Comment deleted successfully' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    next(error);
   }
 };

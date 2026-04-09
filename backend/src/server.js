@@ -6,6 +6,8 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const errorHandler = require('./middleware/errorHandler');
+const { requestMiddleware, metricsHandler } = require('./middleware/metrics');
 
 dotenv.config();
 
@@ -36,6 +38,9 @@ app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Prometheus request metrics
+app.use(requestMiddleware);
+
 // Static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
@@ -59,11 +64,13 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'Server is running' });
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
-});
+// Prometheus metrics endpoint (restrict to internal network via nginx/firewall in production)
+if (process.env.METRICS_ENABLED !== 'false') {
+  app.get('/metrics', metricsHandler);
+}
+
+// Global error handler — must be registered last, after all routes
+app.use(errorHandler);
 
 const PORT = process.env.PORT || 5000;
 
@@ -76,9 +83,37 @@ const startServer = async () => {
 
     console.log('MongoDB connected');
 
-    app.listen(PORT, () => {
+    const server = app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
+      // Signal to PM2 that the app is ready (used with wait_ready: true)
+      if (process.send) {
+        process.send('ready');
+      }
     });
+
+    const shutdown = (signal) => {
+      console.log(`${signal} received — starting graceful shutdown`);
+
+      server.close(async () => {
+        console.log('HTTP server closed');
+        try {
+          await mongoose.connection.close();
+          console.log('MongoDB connection closed');
+        } catch (err) {
+          console.error('Error closing MongoDB connection:', err.message);
+        }
+        process.exit(0);
+      });
+
+      // Force exit if graceful shutdown takes too long
+      setTimeout(() => {
+        console.error('Graceful shutdown timed out — forcing exit');
+        process.exit(1);
+      }, 10000).unref();
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
   } catch (error) {
     console.error('MongoDB connection error:', error.message);
     process.exit(1);
