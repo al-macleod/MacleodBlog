@@ -5,6 +5,7 @@ const Comment = require('../models/Comment');
 const Like = require('../models/Like');
 const User = require('../models/User');
 const { calculateQualityScore } = require('../utils/qualityScore');
+const { resolveMediaUrls } = require('../utils/storage');
 const sanitizeOptions = {
   allowedTags: [
     'p',
@@ -97,11 +98,23 @@ const normalizeInterests = (interests) => {
 };
 
 const normalizeMedia = (files = [], existingMedia = [], replaceMedia = false) => {
-  const uploadedMedia = files.map((file) => ({
-    type: file.mimetype.startsWith('image/') ? 'image' : 'video',
-    url: `/uploads/${file.filename}`,
-    alt: file.originalname
-  }));
+  const uploadedMedia = files.map((file) => {
+    const item = {
+      // mediaType is set by processMedia middleware; fall back to MIME sniff for
+      // any file that bypassed that middleware (e.g. tests).
+      type: file.mediaType || (file.mimetype && file.mimetype.startsWith('image/') ? 'image' : 'video'),
+      // storageKey is the S3/R2 key or local relative path set by processMedia.
+      // Fall back to the legacy multer disk-storage filename for compatibility.
+      url: file.storageKey || (file.filename ? `/uploads/${file.filename}` : ''),
+      alt: file.originalname
+    };
+
+    if (file.thumbnailKey) {
+      item.thumbnailUrl = file.thumbnailKey;
+    }
+
+    return item;
+  });
 
   if (replaceMedia) {
     return uploadedMedia;
@@ -194,14 +207,22 @@ const enrichPostsWithAuthors = async (posts) => {
   const normalizedPosts = posts.map((post) => (typeof post.toObject === 'function' ? post.toObject() : post));
   const authorIds = [...new Set(normalizedPosts.map((post) => post.authorId).filter(Boolean))];
 
+  // Resolve media storage keys to public / signed URLs for every post.
+  const postsWithMedia = await Promise.all(
+    normalizedPosts.map(async (post) => ({
+      ...post,
+      media: await resolveMediaUrls(post.media || [])
+    }))
+  );
+
   if (authorIds.length === 0) {
-    return normalizedPosts;
+    return postsWithMedia;
   }
 
   const authors = await User.find({ id: { $in: authorIds } }).lean();
   const authorMap = new Map(authors.map((author) => [author.id, author]));
 
-  return normalizedPosts.map((post) => ({
+  return postsWithMedia.map((post) => ({
     ...post,
     author: buildAuthorSummary(authorMap.get(post.authorId))
   }));

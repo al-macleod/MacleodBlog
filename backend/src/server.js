@@ -62,7 +62,11 @@ app.get('/api/health', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  const status = err.statusCode || err.status || 500;
+  // Expose the original message for client errors; use a generic message for
+  // server-side errors to avoid leaking implementation details.
+  const message = status < 500 ? err.message : 'Something went wrong!';
+  res.status(status).json({ error: message });
 });
 
 const PORT = process.env.PORT || 5000;

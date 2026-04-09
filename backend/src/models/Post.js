@@ -47,8 +47,9 @@ const postSchema = new mongoose.Schema({
       type: String,
       enum: ['image', 'video']
     },
-    url: String,
-    alt: String
+    url: String,       // storage key (S3/R2) or static /uploads/ path
+    alt: String,
+    thumbnailUrl: String  // storage key for video thumbnail (videos only)
   }],
   hashtags: [String],
   interests: [String], // tags matching user interests

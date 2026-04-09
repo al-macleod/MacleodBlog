@@ -1,6 +1,7 @@
 const express = require('express');
 const postController = require('../controllers/postController');
-const upload = require('../middleware/upload');
+const { upload } = require('../middleware/upload');
+const processMedia = require('../middleware/processMedia');
 const requireAdmin = require('../middleware/requireAdmin');
 const requireUser = require('../middleware/requireUser');
 
@@ -22,10 +23,10 @@ router.get('/trending/hashtags', postController.getTrendingHashtags);
 router.get('/:id', postController.getPost);
 
 // Create post (authenticated user)
-router.post('/', requireUser, upload.array('media', 5), postController.createPost);
+router.post('/', requireUser, upload.array('media', 5), processMedia, postController.createPost);
 
 // Update post (author only)
-router.put('/:id', requireUser, upload.array('media', 5), postController.updatePost);
+router.put('/:id', requireUser, upload.array('media', 5), processMedia, postController.updatePost);
 
 // Delete post (author only)
 router.delete('/:id', requireUser, postController.deletePost);

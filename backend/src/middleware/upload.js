@@ -1,42 +1,43 @@
 const multer = require('multer');
-const path = require('path');
-const { v4: uuidv4 } = require('uuid');
 
-// Configure storage
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, path.join(__dirname, '../../uploads'));
-  },
-  filename: (req, file, cb) => {
-    const uniqueName = uuidv4() + path.extname(file.originalname);
-    cb(null, uniqueName);
-  }
-});
+// Files are kept in memory so the processMedia middleware can validate their
+// magic bytes, compress images, extract video thumbnails, and upload them to
+// S3/R2 (or the local uploads directory) before any bytes are written to disk.
+const storage = multer.memoryStorage();
 
-// File filter
+// First-pass MIME filter based on the Content-Type header declared by the
+// client.  Magic-bytes validation in processMedia provides a second, stronger
+// check against spoofed MIME types.
+const ALLOWED_MIMES = new Set([
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'video/mp4',
+  'video/webm'
+]);
+
+const IMAGE_MAX_SIZE = parseInt(process.env.MAX_IMAGE_SIZE, 10) || 10485760; // 10 MB
+const VIDEO_MAX_SIZE = parseInt(process.env.MAX_VIDEO_SIZE, 10) || 104857600; // 100 MB
+
 const fileFilter = (req, file, cb) => {
-  const allowedMimes = [
-    'image/jpeg',
-    'image/png',
-    'image/gif',
-    'image/webp',
-    'video/mp4',
-    'video/webm'
-  ];
-
-  if (allowedMimes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error('Invalid file type. Only JPEG, PNG, GIF, WebP, MP4, and WebM are allowed.'));
+  if (!ALLOWED_MIMES.has(file.mimetype)) {
+    return cb(
+      new Error('Invalid file type. Only JPEG, PNG, GIF, WebP, MP4, and WebM are allowed.')
+    );
   }
+  cb(null, true);
 };
 
+// Use the larger of the two per-type limits as the global multer cap.
+// Per-type enforcement happens inside processMedia.
 const upload = multer({
   storage,
   fileFilter,
   limits: {
-    fileSize: parseInt(process.env.MAX_FILE_SIZE) || 10485760 // 10MB default
+    fileSize: Math.max(IMAGE_MAX_SIZE, VIDEO_MAX_SIZE)
   }
 });
 
-module.exports = upload;
+module.exports = { upload, IMAGE_MAX_SIZE, VIDEO_MAX_SIZE };
