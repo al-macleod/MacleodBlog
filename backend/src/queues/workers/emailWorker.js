@@ -23,9 +23,12 @@ const send = async (transporter, { to, subject, html }) => {
   await transporter.sendMail({ from, to, subject, html });
 };
 
+// Strip newlines and carriage returns to prevent email header injection
+const sanitizeHeaderValue = (value = '') => String(value).replace(/[\r\n]+/g, ' ').trim();
+
 const templates = {
   'new-comment': ({ postAuthorName, commenterName, postTitle, postSlug, commentContent }) => ({
-    subject: `New comment on your post: ${postTitle}`,
+    subject: `New comment on your post: ${sanitizeHeaderValue(postTitle)}`,
     html: `
       <p>Hi ${postAuthorName},</p>
       <p><strong>${commenterName}</strong> commented on your post
@@ -36,7 +39,7 @@ const templates = {
   }),
 
   mention: ({ mentionedUserName, mentionerName, postTitle, postSlug }) => ({
-    subject: `${mentionerName} mentioned you in "${postTitle}"`,
+    subject: `${sanitizeHeaderValue(mentionerName)} mentioned you in "${sanitizeHeaderValue(postTitle)}"`,
     html: `
       <p>Hi ${mentionedUserName},</p>
       <p><strong>${mentionerName}</strong> mentioned you in the post
@@ -45,7 +48,7 @@ const templates = {
   }),
 
   'new-follower': ({ targetUserName, followerName }) => ({
-    subject: `${followerName} started following you`,
+    subject: `${sanitizeHeaderValue(followerName)} started following you`,
     html: `
       <p>Hi ${targetUserName},</p>
       <p><strong>${followerName}</strong> started following you on BuzzForge.</p>
@@ -53,7 +56,7 @@ const templates = {
   }),
 
   'analytics-digest': ({ period, stats }) => ({
-    subject: `BuzzForge ${period} analytics digest`,
+    subject: `BuzzForge ${sanitizeHeaderValue(period)} analytics digest`,
     html: `
       <h2>BuzzForge ${period} analytics digest</h2>
       <table>

@@ -34,7 +34,7 @@ const processMediaJob = async (job) => {
 
   const { optimized, thumbnail } = getOutputPaths(filePath);
 
-  // Optimized full-size version (lossless webp, strip metadata)
+  // Optimized full-size version (lossy webp at q82, strip metadata)
   await sharp(filePath)
     .webp({ quality: 82 })
     .toFile(optimized);

@@ -65,7 +65,10 @@ const processBackupJob = async (job) => {
     await runMongodump(mongoUri, outFile);
   } catch (err) {
     if (err.code === 'ENOENT') {
-      throw new Error('mongodump not found. Install MongoDB Database Tools to enable backups.');
+      throw new Error(
+        'mongodump not found. Install MongoDB Database Tools ' +
+        '(https://www.mongodb.com/try/download/database-tools) to enable backups.'
+      );
     }
     throw err;
   }

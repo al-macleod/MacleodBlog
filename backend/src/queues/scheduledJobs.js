@@ -10,21 +10,21 @@ const registerScheduledJobs = async () => {
   // Daily analytics digest — 8:00 AM UTC every day
   await analytics.upsertJobScheduler(
     'daily-analytics-digest',
-    { pattern: '0 8 * * *' },
+    { pattern: '0 8 * * *' }, // UTC time
     { name: 'daily-digest', data: { period: 'daily' } }
   );
 
   // Weekly analytics digest — 8:00 AM UTC every Monday
   await analytics.upsertJobScheduler(
     'weekly-analytics-digest',
-    { pattern: '0 8 * * 1' },
+    { pattern: '0 8 * * 1' }, // UTC time
     { name: 'weekly-digest', data: { period: 'weekly' } }
   );
 
   // Daily MongoDB backup — 2:00 AM UTC every day
   await backup.upsertJobScheduler(
     'daily-backup',
-    { pattern: '0 2 * * *' },
+    { pattern: '0 2 * * *' }, // UTC time
     { name: 'backup', data: { destination: process.env.BACKUP_DESTINATION || 'local' } }
   );
 

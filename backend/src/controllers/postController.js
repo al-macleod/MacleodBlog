@@ -416,8 +416,16 @@ exports.createPost = async (req, res) => {
     // Enqueue media optimization for each uploaded image
     for (const file of (req.files || [])) {
       if (file.mimetype.startsWith('image/')) {
+        const filePath = file.path
+          ? path.resolve(file.path)
+          : path.join(__dirname, '../../uploads', file.filename);
+
+        if (!file.path) {
+          console.warn('Media job: file.path missing for', file.filename, '— using fallback path');
+        }
+
         await enqueueMediaOptimization({
-          filePath: path.resolve(file.path || path.join(__dirname, '../../uploads', file.filename)),
+          filePath,
           filename: file.filename,
           mimeType: file.mimetype,
           postId: newPost.id

@@ -26,7 +26,8 @@ const closeRedisConnection = async () => {
   if (connection) {
     try {
       await connection.quit();
-    } catch (_) {
+    } catch (err) {
+      console.warn('Redis quit error, forcing disconnect:', err.message);
       connection.disconnect();
     }
     connection = null;
