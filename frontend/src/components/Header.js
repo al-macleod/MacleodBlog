@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { FaBars, FaSearch, FaTimes } from 'react-icons/fa';
+import { FaBars, FaMoon, FaSearch, FaSun, FaTimes } from 'react-icons/fa';
 import '../styles/Header.css';
 import api from '../services/api';
+import { useTheme } from '../App';
 
 function Header() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -11,6 +12,7 @@ function Header() {
   const [openDropdown, setOpenDropdown] = useState(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const { darkMode, toggleDarkMode } = useTheme();
 
   const exploreLinks = useMemo(() => ([
     { to: '/', label: 'Home', end: true },
@@ -167,6 +169,15 @@ function Header() {
           </nav>
 
           <div className="header-utilities">
+            <button
+              type="button"
+              className="dark-mode-toggle"
+              onClick={toggleDarkMode}
+              aria-label={darkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={darkMode ? 'Light mode' : 'Dark mode'}
+            >
+              {darkMode ? <FaSun aria-hidden="true" /> : <FaMoon aria-hidden="true" />}
+            </button>
             <form className="search-form" onSubmit={handleSearch}>
               <input
                 type="text"

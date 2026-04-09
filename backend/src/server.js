@@ -9,6 +9,8 @@ const rateLimit = require('express-rate-limit');
 
 dotenv.config();
 
+const { initPassport } = require('./utils/passport');
+
 mongoose.set('strictQuery', true);
 
 const app = express();
@@ -35,6 +37,8 @@ app.use('/api', apiLimiter);
 app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+initPassport();
 
 // Static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
