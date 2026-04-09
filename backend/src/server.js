@@ -6,6 +6,8 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const logger = require('./utils/logger');
+const requestLogger = require('./middleware/requestLogger');
 
 dotenv.config();
 
@@ -15,26 +17,70 @@ const app = express();
 
 app.set('trust proxy', 1);
 
+// General API rate limiter
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 600,
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  message: { error: 'Too many requests, please try again later.' }
 });
 
-// Middleware
+// Stricter limiter for authentication routes
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many authentication attempts, please try again later.' }
+});
+
+// Security headers with Helmet
 app.use(helmet({
-  contentSecurityPolicy: false
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https://ui-avatars.com', 'https://lh3.googleusercontent.com'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      frameSrc: ["'none'"],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null
+    }
+  },
+  crossOriginEmbedderPolicy: false
 }));
+
+const allowedOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000')
+  .split(',')
+  .map((o) => o.trim());
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
-  credentials: true
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
+
+app.use('/api/auth', authLimiter);
+app.use('/api/users/login', authLimiter);
+app.use('/api/users/register', authLimiter);
+app.use('/api/users/forgot-password', authLimiter);
+app.use('/api/users/reset-password', authLimiter);
 app.use('/api', apiLimiter);
 
+app.use(requestLogger);
 app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Static files for uploads
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
@@ -61,7 +107,7 @@ app.get('/api/health', (req, res) => {
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error(err.message, { stack: err.stack, url: req.originalUrl, method: req.method });
   res.status(500).json({ error: 'Something went wrong!' });
 });
 
@@ -74,13 +120,13 @@ const startServer = async () => {
       socketTimeoutMS: 45000
     });
 
-    console.log('MongoDB connected');
+    logger.info('MongoDB connected');
 
     app.listen(PORT, () => {
-      console.log(`Server is running on port ${PORT}`);
+      logger.info(`Server is running on port ${PORT}`);
     });
   } catch (error) {
-    console.error('MongoDB connection error:', error.message);
+    logger.error('MongoDB connection error:', { message: error.message });
     process.exit(1);
   }
 };
