@@ -1,8 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { GoogleLogin } from '@react-oauth/google';
+import { FaGoogle, FaGithub } from 'react-icons/fa';
 import api from '../services/api';
 import '../styles/UserAuthPage.css';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
 const predefinedInterests = [
   'Technology', 'Design', 'Marketing', 'Business', 'Health', 'Fitness', 'Travel', 'Food', 'Art', 'Music', 'Writing', 'Education'
@@ -61,7 +63,9 @@ function UserAuthPage() {
   const [registerForm, setRegisterForm] = useState(initialRegisterForm);
   const [forgotEmail, setForgotEmail] = useState('');
   const [resetForm, setResetForm] = useState({ token: '', password: '', confirmPassword: '' });
+
   const googleEnabled = Boolean(process.env.REACT_APP_GOOGLE_CLIENT_ID);
+  const githubEnabled = Boolean(process.env.REACT_APP_GITHUB_CLIENT_ID);
 
   const registerPasswordStrength = useMemo(() => getPasswordStrength(registerForm.password), [registerForm.password]);
   const resetPasswordStrength = useMemo(() => getPasswordStrength(resetForm.password), [resetForm.password]);
@@ -76,23 +80,36 @@ function UserAuthPage() {
     [resetForm.confirmPassword, resetForm.password]
   );
 
-  const loadSession = async () => {
+  const loadSession = useCallback(async () => {
     try {
       const response = await api.get('/users/me');
       setUser(response.data.user);
     } catch (error) {
       setUser(null);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadSession();
-  }, []);
+  }, [loadSession]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const queryMode = params.get('mode');
     const queryToken = params.get('token');
+    const oauthResult = params.get('oauth');
+    const oauthError = params.get('error');
+
+    if (oauthResult === 'success') {
+      loadSession().then(() => {
+        setMessage({ type: 'success', text: 'Signed in successfully.' });
+      });
+      return;
+    }
+
+    if (oauthError) {
+      setMessage({ type: 'error', text: 'Social sign in failed. Please try again.' });
+    }
 
     if (queryMode === 'reset') {
       setMode('reset');
@@ -101,7 +118,7 @@ function UserAuthPage() {
     if (queryToken) {
       setResetForm((prev) => ({ ...prev, token: queryToken }));
     }
-  }, [location.search]);
+  }, [location.search, loadSession]);
 
   const handleLogin = async (event) => {
     event.preventDefault();
@@ -114,26 +131,6 @@ function UserAuthPage() {
       setMessage({ type: 'success', text: 'Logged in successfully.' });
     } catch (error) {
       setMessage({ type: 'error', text: error.response?.data?.error || 'Login failed.' });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleLogin = async (credentialResponse) => {
-    if (!credentialResponse?.credential) {
-      setMessage({ type: 'error', text: 'Google sign in failed. No credential was returned.' });
-      return;
-    }
-
-    setLoading(true);
-    setMessage({ type: '', text: '' });
-
-    try {
-      const response = await api.post('/users/google', { idToken: credentialResponse.credential });
-      setUser(response.data.user);
-      setMessage({ type: 'success', text: 'Signed in with Google.' });
-    } catch (error) {
-      setMessage({ type: 'error', text: error.response?.data?.error || 'Google sign in failed.' });
     } finally {
       setLoading(false);
     }
@@ -215,6 +212,10 @@ function UserAuthPage() {
     }
   };
 
+  const handleOAuthLogin = (provider) => {
+    window.location.href = `${API_BASE}/users/auth/${provider}`;
+  };
+
   const toggleInterest = (interest) => {
     setRegisterForm((prev) => ({
       ...prev,
@@ -259,6 +260,22 @@ function UserAuthPage() {
     );
   }
 
+  const socialButtons = (googleEnabled || githubEnabled) ? (
+    <div className="social-login-block">
+      <div className="social-divider"><span>or</span></div>
+      {googleEnabled ? (
+        <button type="button" className="btn-social btn-google" onClick={() => handleOAuthLogin('google')}>
+          <FaGoogle aria-hidden="true" /> Continue with Google
+        </button>
+      ) : null}
+      {githubEnabled ? (
+        <button type="button" className="btn-social btn-github" onClick={() => handleOAuthLogin('github')}>
+          <FaGithub aria-hidden="true" /> Continue with GitHub
+        </button>
+      ) : null}
+    </div>
+  ) : null;
+
   return (
     <div className="auth-container">
       <div className="auth-card">
@@ -293,15 +310,7 @@ function UserAuthPage() {
             />
             <button type="submit" className="btn-submit" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</button>
             <button type="button" className="text-link" onClick={() => setMode('forgot')}>Forgot your password?</button>
-
-            {googleEnabled ? (
-              <div className="social-login-block">
-                <div className="social-divider"><span>or</span></div>
-                <GoogleLogin onSuccess={handleGoogleLogin} onError={() => setMessage({ type: 'error', text: 'Google sign in failed.' })} />
-              </div>
-            ) : (
-              <p className="social-hint">Google sign in is not configured yet. Set REACT_APP_GOOGLE_CLIENT_ID to enable it.</p>
-            )}
+            {socialButtons}
           </form>
         ) : (
           mode === 'register' ? (
@@ -371,13 +380,7 @@ function UserAuthPage() {
             </div>
 
             <button type="submit" className="btn-submit" disabled={loading}>{loading ? 'Creating account...' : 'Create Account'}</button>
-
-            {googleEnabled ? (
-              <div className="social-login-block">
-                <div className="social-divider"><span>or</span></div>
-                <GoogleLogin onSuccess={handleGoogleLogin} onError={() => setMessage({ type: 'error', text: 'Google sign in failed.' })} />
-              </div>
-            ) : null}
+            {socialButtons}
           </form>
           ) : mode === 'forgot' ? (
             <form className="auth-form" onSubmit={handleForgotPassword}>

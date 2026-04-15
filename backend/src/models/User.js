@@ -49,9 +49,14 @@ const userSchema = new mongoose.Schema({
     default: null,
     index: true
   },
+  githubId: {
+    type: String,
+    default: null,
+    index: true
+  },
   authProvider: {
     type: String,
-    enum: ['local', 'google'],
+    enum: ['local', 'google', 'github'],
     default: 'local'
   },
   dateOfBirth: {

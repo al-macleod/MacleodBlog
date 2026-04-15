@@ -1,18 +1,23 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { OAuth2Client } = require('google-auth-library');
 const User = require('../models/User');
+const RefreshToken = require('../models/RefreshToken');
 const {
   cookieName,
+  refreshCookieName,
   getCookieOptions,
+  getRefreshCookieOptions,
   getClearCookieOptions,
-  createUserToken
+  createUserToken,
+  generateRefreshToken
 } = require('../utils/userSession');
+const { sendPasswordResetEmail } = require('../utils/email');
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const phoneRegex = /^[\d\s\+\-\(\)]{10,}$/; // Basic phone validation
 const passwordStrengthRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
-const googleClient = new OAuth2Client();
+
+const getAppUrl = () => process.env.CORS_ORIGIN || 'http://localhost:3000';
 const passwordRules = {
   minLength: 8,
   hasLower: /[a-z]/,
@@ -25,6 +30,12 @@ const normalizePhone = (value = '') => value.replace(/\s|\-|\(|\)/g, '');
 const getResetTokenTTLMinutes = () => {
   const ttl = Number(process.env.RESET_PASSWORD_TOKEN_TTL_MINUTES);
   return Number.isFinite(ttl) && ttl > 0 ? ttl : 30;
+};
+
+// Generate avatar initials URL
+const generateAvatarInitials = (firstName, lastName) => {
+  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=random&color=fff`;
 };
 
 const getPasswordValidationError = (password, confirmPassword) => {
@@ -70,34 +81,6 @@ const validateAge = (dateValue) => {
   return age >= 13;
 };
 
-const getGoogleClientId = () => process.env.GOOGLE_CLIENT_ID;
-
-const verifyGoogleIdToken = async (idToken) => {
-  const clientId = getGoogleClientId();
-  if (!clientId) {
-    throw new Error('GOOGLE_CLIENT_ID is not configured on the server');
-  }
-
-  const ticket = await googleClient.verifyIdToken({
-    idToken,
-    audience: clientId
-  });
-
-  const payload = ticket.getPayload();
-  if (!payload || !payload.sub || !payload.email) {
-    throw new Error('Invalid Google identity payload');
-  }
-
-  return payload;
-};
-
-// Generate avatar initials URL
-const generateAvatarInitials = (firstName, lastName) => {
-  const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-  // Using UI Avatars service for initials-based avatar
-  return `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=random&color=fff`;
-};
-
 const toPublicUser = (user) => ({
   id: user.id,
   firstName: user.firstName,
@@ -116,6 +99,18 @@ const toPublicUser = (user) => ({
   postsCount: user.postsCount || 0,
   createdAt: user.createdAt
 });
+
+// Issue access token + refresh token and set both cookies
+const issueTokens = async (res, user) => {
+  const tokenPayload = { userId: user.id, email: user.email, role: user.role };
+  const accessToken = createUserToken(tokenPayload);
+
+  const { raw, hash, expiresAt } = generateRefreshToken();
+  await RefreshToken.create({ tokenHash: hash, userId: user.id, expiresAt });
+
+  res.cookie(cookieName, accessToken, getCookieOptions());
+  res.cookie(refreshCookieName, raw, getRefreshCookieOptions());
+};
 
 exports.register = async (req, res) => {
   try {
@@ -195,13 +190,7 @@ exports.register = async (req, res) => {
       updatedAt: new Date()
     });
 
-    const token = createUserToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role
-    });
-
-    res.cookie(cookieName, token, getCookieOptions());
+    await issueTokens(res, user);
     return res.status(201).json({ user: toPublicUser(user), authenticated: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
@@ -222,7 +211,7 @@ exports.login = async (req, res) => {
     }
 
     if (!user.passwordHash) {
-      return res.status(400).json({ error: 'This account uses social sign in. Use Google to continue.' });
+      return res.status(400).json({ error: 'This account uses social sign in. Use Google or GitHub to continue.' });
     }
 
     const isValidPassword = await bcrypt.compare(password, user.passwordHash);
@@ -230,22 +219,58 @@ exports.login = async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    const token = createUserToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role
-    });
-
-    res.cookie(cookieName, token, getCookieOptions());
+    await issueTokens(res, user);
     return res.json({ user: toPublicUser(user), authenticated: true });
   } catch (error) {
     return res.status(500).json({ error: error.message });
   }
 };
 
-exports.logout = (req, res) => {
+exports.logout = async (req, res) => {
+  try {
+    const rawToken = req.cookies?.[refreshCookieName];
+    if (rawToken) {
+      const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+      await RefreshToken.deleteOne({ tokenHash: hash });
+    }
+  } catch (_) {
+    // Best effort – still clear cookies even if DB deletion fails
+  }
+
   res.clearCookie(cookieName, getClearCookieOptions());
+  res.clearCookie(refreshCookieName, { ...getClearCookieOptions(), path: '/' });
   return res.json({ authenticated: false });
+};
+
+exports.refreshTokens = async (req, res) => {
+  try {
+    const rawToken = req.cookies?.[refreshCookieName];
+    if (!rawToken) {
+      return res.status(401).json({ error: 'Refresh token missing' });
+    }
+
+    const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    const stored = await RefreshToken.findOne({ tokenHash: hash, expiresAt: { $gt: new Date() } });
+    if (!stored) {
+      res.clearCookie(cookieName, getClearCookieOptions());
+      res.clearCookie(refreshCookieName, { ...getClearCookieOptions(), path: '/' });
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    const user = await User.findOne({ id: stored.userId, isActive: true });
+    if (!user) {
+      await RefreshToken.deleteOne({ _id: stored._id });
+      return res.status(401).json({ error: 'User not found' });
+    }
+
+    // Rotate: delete old token, issue new pair
+    await RefreshToken.deleteOne({ _id: stored._id });
+    await issueTokens(res, user);
+
+    return res.json({ authenticated: true });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
 };
 
 exports.forgotPassword = async (req, res) => {
@@ -278,13 +303,22 @@ exports.forgotPassword = async (req, res) => {
     user.updatedAt = new Date();
     await user.save();
 
+    const resetUrl = `${getAppUrl()}/account?mode=reset&token=${rawToken}`;
+
     if (process.env.NODE_ENV !== 'production') {
-      const appUrl = process.env.CORS_ORIGIN || 'http://localhost:3000';
       return res.json({
         ...safeResponse,
         resetToken: rawToken,
-        resetUrl: `${appUrl}/auth?mode=reset&token=${rawToken}`
+        resetUrl
       });
+    }
+
+    // Send email in production (or whenever SMTP is configured)
+    try {
+      await sendPasswordResetEmail(user.email, resetUrl, ttlMinutes);
+    } catch (emailError) {
+      console.error('Failed to send password reset email to user', user.id, ':', emailError.message);
+      // Don't reveal email errors to caller for security
     }
 
     return res.json(safeResponse);
@@ -324,6 +358,9 @@ exports.resetPassword = async (req, res) => {
     user.resetPasswordExpiresAt = null;
     user.updatedAt = new Date();
     await user.save();
+
+    // Invalidate all refresh tokens for this user after password reset
+    await RefreshToken.deleteMany({ userId: user.id });
 
     return res.json({ message: 'Password has been reset successfully. You can now sign in.' });
   } catch (error) {
@@ -393,63 +430,18 @@ exports.getUserProfile = async (req, res) => {
   }
 };
 
-exports.googleSignIn = async (req, res) => {
+// Called after Passport OAuth succeeds (Google or GitHub)
+exports.oauthCallback = (provider) => async (req, res) => {
   try {
-    const { idToken } = req.body;
-
-    if (!idToken) {
-      return res.status(400).json({ error: 'Google id token is required' });
-    }
-
-    const payload = await verifyGoogleIdToken(idToken);
-    const email = payload.email.toLowerCase().trim();
-    const googleId = payload.sub;
-    const [firstNameFallback = 'Google', ...restName] = (payload.name || 'Google User').trim().split(' ');
-    const lastNameFallback = restName.join(' ') || 'User';
-
-    let user = await User.findOne({ email });
-
+    const user = req.user;
     if (!user) {
-      user = await User.create({
-        firstName: firstNameFallback,
-        lastName: lastNameFallback,
-        email,
-        phone: '',
-        passwordHash: null,
-        dateOfBirth: null,
-        gender: 'prefer-not-to-say',
-        location: '',
-        bio: '',
-        interests: [],
-        avatar: payload.picture || generateAvatarInitials(firstNameFallback, lastNameFallback),
-        googleId,
-        authProvider: 'google',
-        role: 'user',
-        isActive: true,
-        postsCount: 0,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      });
-    } else {
-      user.googleId = user.googleId || googleId;
-      user.authProvider = user.authProvider || 'google';
-      user.avatar = user.avatar || payload.picture || user.avatar;
-      user.updatedAt = new Date();
-      await user.save();
+      return res.redirect(`${getAppUrl()}/account?error=oauth_failed`);
     }
 
-    const token = createUserToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role
-    });
+    await issueTokens(res, user);
 
-    res.cookie(cookieName, token, getCookieOptions());
-    return res.json({
-      user: toPublicUser(user),
-      authenticated: true
-    });
+    return res.redirect(`${getAppUrl()}/account?oauth=success`);
   } catch (error) {
-    return res.status(401).json({ error: error.message || 'Google sign in failed' });
+    return res.redirect(`${getAppUrl()}/account?error=oauth_failed`);
   }
 };
